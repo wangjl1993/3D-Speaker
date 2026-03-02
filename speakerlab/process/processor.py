@@ -140,7 +140,7 @@ class FBank(object):
         self.sample_rate = sample_rate
         self.mean_nor = mean_nor
 
-    def __call__(self, wav, dither=0):
+    def __call__(self, wav, dither=0, lengths=None):
         sr = 16000
         assert sr==self.sample_rate
         if len(wav.shape) == 1:
@@ -154,5 +154,17 @@ class FBank(object):
             sample_frequency=sr, dither=dither)
         # feat: [T, N]
         if self.mean_nor:
-            feat = feat - feat.mean(0, keepdim=True)
+            if lengths is None:
+                feat = feat - feat.mean(0, keepdim=True)
+            else:
+                if not torch.is_tensor(lengths):
+                    lengths = torch.as_tensor(lengths, device=feat.device)
+                lengths = lengths.long().clamp(min=0)
+                if lengths.dim() == 0:
+                    lengths = lengths.unsqueeze(0)
+                valid = torch.clamp(lengths[0], max=feat.shape[0]).item()
+                if valid <= 0:
+                    feat = feat - feat.mean(0, keepdim=True)
+                else:
+                    feat = feat - feat[:valid].mean(0, keepdim=True)
         return feat

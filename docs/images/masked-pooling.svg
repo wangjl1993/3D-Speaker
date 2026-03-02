@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="240" viewBox="0 0 900 240">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,3 L0,6" fill="#333" />
+    </marker>
+  </defs>
+
+  <text x="20" y="30" font-family="Arial" font-size="14">Time axis with padding</text>
+  <rect x="20" y="50" width="700" height="40" fill="#ffffff" stroke="#333"/>
+
+  <!-- Valid frames -->
+  <rect x="20" y="50" width="460" height="40" fill="#cfe9ff" stroke="#333"/>
+  <text x="250" y="75" text-anchor="middle" font-family="Arial" font-size="12">valid frames (lengths)</text>
+
+  <!-- Padded frames -->
+  <rect x="480" y="50" width="240" height="40" fill="#e6e6e6" stroke="#333"/>
+  <text x="600" y="75" text-anchor="middle" font-family="Arial" font-size="12">padding</text>
+
+  <line x1="20" y1="110" x2="480" y2="110" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="250" y="130" text-anchor="middle" font-family="Arial" font-size="12">mask selects valid frames</text>
+
+  <rect x="520" y="140" width="340" height="60" rx="8" fill="#fff5e8" stroke="#333"/>
+  <text x="690" y="170" text-anchor="middle" font-family="Arial" font-size="14">mean / std computed</text>
+  <text x="690" y="190" text-anchor="middle" font-family="Arial" font-size="12">only on valid frames</text>
+
+  <line x1="480" y1="110" x2="520" y2="170" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+</svg>

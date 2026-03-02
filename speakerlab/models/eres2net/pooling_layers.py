@@ -14,7 +14,7 @@ class TAP(nn.Module):
     def __init__(self, **kwargs):
         super(TAP, self).__init__()
 
-    def forward(self, x):
+    def forward(self, x, lengths=None):
         pooling_mean = x.mean(dim=-1)
         # To be compatable with 2D input
         pooling_mean = pooling_mean.flatten(start_dim=1)
@@ -28,7 +28,7 @@ class TSDP(nn.Module):
     def __init__(self, **kwargs):
         super(TSDP, self).__init__()
 
-    def forward(self, x):
+    def forward(self, x, lengths=None):
         # The last dimension is the temporal axis
         pooling_std = torch.sqrt(torch.var(x, dim=-1) + 1e-8)
         pooling_std = pooling_std.flatten(start_dim=1)
@@ -44,15 +44,97 @@ class TSTP(nn.Module):
     def __init__(self, **kwargs):
         super(TSTP, self).__init__()
 
-    def forward(self, x):
+    def forward(self, x, lengths=None):
         # The last dimension is the temporal axis
-        pooling_mean = x.mean(dim=-1)
-        pooling_std = torch.sqrt(torch.var(x, dim=-1) + 1e-8)
-        pooling_mean = pooling_mean.flatten(start_dim=1)
-        pooling_std = pooling_std.flatten(start_dim=1)
+        if lengths is None:
+            pooling_mean = x.mean(dim=-1)
+            pooling_std = torch.sqrt(torch.var(x, dim=-1) + 1e-8)
+            pooling_mean = pooling_mean.flatten(start_dim=1)
+            pooling_std = pooling_std.flatten(start_dim=1)
+            return torch.cat((pooling_mean, pooling_std), 1)
 
-        stats = torch.cat((pooling_mean, pooling_std), 1)
-        return stats
+        if not torch.is_tensor(lengths):
+            lengths = torch.as_tensor(lengths, device=x.device)
+        lengths = lengths.long().clamp(min=0)
+        if lengths.dim() == 0:
+            lengths = lengths.unsqueeze(0)
+
+        time_dim = x.shape[-1]
+        lengths = torch.clamp(lengths, max=time_dim)
+        mask = torch.arange(time_dim, device=x.device).unsqueeze(0) < lengths.unsqueeze(1)
+        mask = mask.to(x.dtype)
+
+        if len(x.shape) == 4:
+            mask_4d = mask[:, None, None, :]
+            denom = mask_4d.sum(dim=-1).clamp(min=1.0)
+            mean = (x * mask_4d).sum(dim=-1) / denom
+            var = (x.pow(2) * mask_4d).sum(dim=-1) / denom - mean.pow(2)
+            std = torch.sqrt(var.clamp(min=1e-10))
+            mean = mean.flatten(start_dim=1)
+            std = std.flatten(start_dim=1)
+            return torch.cat((mean, std), 1)
+
+        mask_3d = mask[:, None, :]
+        denom = mask_3d.sum(dim=-1).clamp(min=1.0)
+        mean = (x * mask_3d).sum(dim=-1) / denom
+        var = (x.pow(2) * mask_3d).sum(dim=-1) / denom - mean.pow(2)
+        std = torch.sqrt(var.clamp(min=1e-10))
+        return torch.cat((mean, std), 1)
+
+
+class MaskedTSTP(nn.Module):
+    """
+    Temporal statistics pooling with time mask.
+
+    lengths: valid time steps for each sample (shape [B]).
+    """
+    def __init__(self, **kwargs):
+        super(MaskedTSTP, self).__init__()
+
+    def forward(self, x, lengths=None):
+        if lengths is None:
+            # Fallback to vanilla behavior
+            if len(x.shape) == 4:
+                pooling_mean = x.mean(dim=-1)
+                pooling_std = torch.sqrt(torch.var(x, dim=-1) + 1e-8)
+                pooling_mean = pooling_mean.flatten(start_dim=1)
+                pooling_std = pooling_std.flatten(start_dim=1)
+                return torch.cat((pooling_mean, pooling_std), 1)
+            pooling_mean = x.mean(dim=-1)
+            pooling_std = torch.sqrt(torch.var(x, dim=-1) + 1e-8)
+            pooling_mean = pooling_mean.flatten(start_dim=1)
+            pooling_std = pooling_std.flatten(start_dim=1)
+            return torch.cat((pooling_mean, pooling_std), 1)
+
+        if not torch.is_tensor(lengths):
+            lengths = torch.as_tensor(lengths, device=x.device)
+        lengths = lengths.long().clamp(min=0)
+        if lengths.dim() == 0:
+            lengths = lengths.unsqueeze(0)
+
+        time_dim = x.shape[-1]
+        lengths = torch.clamp(lengths, max=time_dim)
+        mask = torch.arange(time_dim, device=x.device).unsqueeze(0) < lengths.unsqueeze(1)
+        mask = mask.to(x.dtype)
+
+        if len(x.shape) == 4:
+            # x: (B, C, F, T)
+            mask_4d = mask[:, None, None, :]
+            denom = mask_4d.sum(dim=-1).clamp(min=1.0)
+            mean = (x * mask_4d).sum(dim=-1) / denom
+            var = (x.pow(2) * mask_4d).sum(dim=-1) / denom - mean.pow(2)
+            std = torch.sqrt(var.clamp(min=1e-10))
+            mean = mean.flatten(start_dim=1)
+            std = std.flatten(start_dim=1)
+            return torch.cat((mean, std), 1)
+
+        # x: (B, F, T)
+        mask_3d = mask[:, None, :]
+        denom = mask_3d.sum(dim=-1).clamp(min=1.0)
+        mean = (x * mask_3d).sum(dim=-1) / denom
+        var = (x.pow(2) * mask_3d).sum(dim=-1) / denom - mean.pow(2)
+        std = torch.sqrt(var.clamp(min=1e-10))
+        return torch.cat((mean, std), 1)
 
 
 class ASTP(nn.Module):

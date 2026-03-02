@@ -100,6 +100,22 @@ python speakerlab/bin/infer_diarization.py --wav [wav_list OR wav_path] --out_di
 python speakerlab/bin/infer_diarization.py --wav [wav_list OR wav_path] --out_dir $out_dir --include_overlap --hf_access_token $hf_access_token
 ```
 
+## Local Modifications (modified by jielong.wang on 2026.03.02)
+This workspace adds length-aware processing to reduce padding bias when handling variable-length audio in batch mode. The main motivation is fixed-length inference on edge devices via RKNN: inputs must be padded to a fixed length, and without masking the padded audio can noticeably distort extracted features. The added `lengths` logic keeps statistics and normalization focused on valid frames.
+
+中文说明：本地新增变长处理逻辑，面向 RKNN 端侧定长推理场景。由于推理输入必须 padding 到固定长度，若不做掩码处理，会导致特征统计发生明显偏移。新增的 `lengths` 传递与掩码池化仅在有效帧上计算均值/方差，稳定特征分布。
+
+![Variable-length flow](docs/images/lengths-flow.svg)
+
+Summary of code changes:
+- `speakerlab/models/eres2net/ERes2NetV2.py` adds `lengths` to `forward` and maps input lengths to the pooled time dimension before statistics pooling.
+- `speakerlab/models/eres2net/pooling_layers.py` makes `TAP/TSDP/TSTP` accept `lengths` and adds `MaskedTSTP` for masked mean/std pooling on valid frames only.
+- `speakerlab/process/processor.py` makes `FBank` mean normalization length-aware so padding does not skew the mean.
+
+Masked pooling concept:
+
+![Masked pooling](docs/images/masked-pooling.svg)
+
 ## Overview of Content
 
 - **Supervised Speaker Verification**
@@ -128,6 +144,7 @@ python speakerlab/bin/infer_diarization.py --wav [wav_list OR wav_path] --out_di
 
 
 ## What‘s new :fire:
+- [2026.03] Add length-aware feature normalization and masked pooling for RKNN fixed-length inference (padding no longer distorts statistics).
 - [2024.12] Update [diarization](https://github.com/modelscope/3D-Speaker/tree/main/egs/3dspeaker/speaker-diarization) recipes and add results on multiple diarization benchmarks.
 - [2024.8] Releasing [ERes2NetV2](https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common) and [ERes2NetV2_w24s4ep4](https://modelscope.cn/models/iic/speech_eres2netv2w24s4ep4_sv_zh-cn_16k-common) pretrained models trained on 200k-speaker datasets.
 - [2024.5] Releasing [SDPN](https://github.com/modelscope/3D-Speaker/tree/main/egs/voxceleb/sv-sdpn) model and [X-vector](https://github.com/modelscope/3D-Speaker/tree/main/egs/voxceleb/sv-xvector) model training and inference recipes for VoxCeleb.

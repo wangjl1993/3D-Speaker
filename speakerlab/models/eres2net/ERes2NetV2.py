@@ -232,7 +232,7 @@ class ERes2NetV2(nn.Module):
             self.in_planes = planes * self.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, lengths=None):
         x = x.permute(0, 2, 1)  # (B,T,F) => (B,F,T)
         x = x.unsqueeze_(1)
         out = F.relu(self.bn1(self.conv1(x)))
@@ -242,7 +242,21 @@ class ERes2NetV2(nn.Module):
         out4 = self.layer4(out3)
         out3_ds = self.layer3_ds(out3)
         fuse_out34 = self.fuse34(out4, out3_ds)
-        stats = self.pool(fuse_out34)
+        if lengths is None:
+            stats = self.pool(fuse_out34)
+        else:
+            if not torch.is_tensor(lengths):
+                lengths = torch.as_tensor(lengths, device=fuse_out34.device)
+            lengths = lengths.long().clamp(min=0)
+            if lengths.dim() == 0:
+                lengths = lengths.unsqueeze(0)
+            # Map input feature lengths to the pooling time dimension by ratio
+            in_t = x.shape[-1]
+            out_t = fuse_out34.shape[-1]
+            if in_t > 0:
+                lengths = torch.ceil(lengths.float() * out_t / in_t).long()
+            lengths = torch.clamp(lengths, max=out_t)
+            stats = self.pool(fuse_out34, lengths=lengths)
 
         embed_a = self.seg_1(stats)
         if self.two_emb_layer:
@@ -263,7 +277,6 @@ if __name__ == '__main__':
     macs, num_params = profile(model, inputs=(x, ))
     print("Params: {} M".format(num_params / 1e6)) # 17.86 M
     print("MACs: {} G".format(macs / 1e9)) # 12.69 G
-
 
 
 
