@@ -242,21 +242,23 @@ class ERes2NetV2(nn.Module):
         out4 = self.layer4(out3)
         out3_ds = self.layer3_ds(out3)
         fuse_out34 = self.fuse34(out4, out3_ds)
-        if lengths is None:
-            stats = self.pool(fuse_out34)
-        else:
-            if not torch.is_tensor(lengths):
-                lengths = torch.as_tensor(lengths, device=fuse_out34.device)
-            lengths = lengths.long().clamp(min=0)
-            if lengths.dim() == 0:
-                lengths = lengths.unsqueeze(0)
-            # Map input feature lengths to the pooling time dimension by ratio
-            in_t = x.shape[-1]
-            out_t = fuse_out34.shape[-1]
-            if in_t > 0:
-                lengths = torch.ceil(lengths.float() * out_t / in_t).long()
-            lengths = torch.clamp(lengths, max=out_t)
-            stats = self.pool(fuse_out34, lengths=lengths)
+
+        stats = self.pool(fuse_out34, lengths=lengths)
+        # if lengths is None:
+        #     stats = self.pool(fuse_out34)
+        # else:
+        #     if not torch.is_tensor(lengths):
+        #         lengths = torch.as_tensor(lengths, device=fuse_out34.device)
+        #     lengths = lengths.long().clamp(min=0)
+        #     if lengths.dim() == 0:
+        #         lengths = lengths.unsqueeze(0)
+        #     # Map input feature lengths to the pooling time dimension by ratio
+        #     in_t = x.shape[-1]
+        #     out_t = fuse_out34.shape[-1]
+        #     if in_t > 0:
+        #         lengths = torch.ceil(lengths.float() * out_t / in_t).long()
+        #     lengths = torch.clamp(lengths, max=out_t)
+        #     stats = self.pool(fuse_out34, lengths=lengths)
 
         embed_a = self.seg_1(stats)
         if self.two_emb_layer:
