@@ -15,9 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-stage=-1
-stop_stage=-1
-data=data
+stage=3
+stop_stage=4
+data=/home/akuvox-a100/SSD2T/jielong.wang/dataset/train_speaker_verification
 
 . utils/parse_options.sh || exit 1
 
@@ -65,9 +65,9 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
 
   mkdir -p ${data}/musan ${data}/rirs ${data}/3dspeaker
   # musan
-  find $(pwd)/${rawdata_dir}/musan/noise/free-sound -name "*.wav" | awk -F"/" '{print $(NF-2)"/"$(NF-1)"/"$NF,$0}' >${data}/musan/wav.scp
+  find ${rawdata_dir}/musan/noise/free-sound -name "*.wav" | awk -F"/" '{print $(NF-2)"/"$(NF-1)"/"$NF,$0}' >${data}/musan/wav.scp
   # rirs
-  awk '{print $5}' $(pwd)/${rawdata_dir}/RIRS_NOISES/real_rirs_isotropic_noises/rir_list | xargs -I {} echo {} $(pwd)/${rawdata_dir}/{} > ${data}/rirs/wav.scp
+  awk '{print $5}' ${rawdata_dir}/RIRS_NOISES/real_rirs_isotropic_noises/rir_list | xargs -I {} echo {} ${rawdata_dir}/{} > ${data}/rirs/wav.scp
   # 3dspeaker
   base_path=${data}/3dspeaker/
   ## train

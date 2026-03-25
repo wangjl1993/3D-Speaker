@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
+import os
 
 from speakerlab.utils.utils import set_seed, get_logger, AverageMeters, ProgressMeter, accuracy
 from speakerlab.utils.config import build_config
@@ -26,12 +27,20 @@ parser.add_argument('--gpu', nargs='+', help='GPU id to use.')
 def main():
     args, overrides = parser.parse_known_args(sys.argv[1:])
     config = build_config(args.config, overrides, True)
-
-    rank = int(os.environ['LOCAL_RANK'])
-    world_size = int(os.environ['WORLD_SIZE'])
-    gpu = int(args.gpu[rank])
-    torch.cuda.set_device(gpu)
-    dist.init_process_group(backend='nccl')
+    if 'LOCAL_RANK' in os.environ:
+        rank = int(os.environ['LOCAL_RANK'])
+        world_size = int(os.environ['WORLD_SIZE'])
+        gpu = int(args.gpu[rank])
+        torch.cuda.set_device(gpu)
+        dist.init_process_group(backend='nccl')
+        
+    else:
+        rank = 0
+        world_size = 1
+        gpu = int(args.gpu[0])
+        torch.cuda.set_device(gpu)   # 👈 补上
+        print("single-gpu training...")
+    
 
     set_seed(args.seed)
 
@@ -42,8 +51,8 @@ def main():
     # dataset
     train_dataset = build('dataset', config)
     # dataloader
-    train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    config.dataloader['args']['sampler'] = train_sampler
+    # train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+    # config.dataloader['args']['sampler'] = train_sampler
     config.dataloader['args']['batch_size'] = int(config.batch_size / world_size)
     train_dataloader = build('dataloader', config)
 
@@ -57,7 +66,7 @@ def main():
     classifier = build('classifier', config)
     model = nn.Sequential(embedding_model, classifier)
     model.cuda()
-    model = torch.nn.parallel.DistributedDataParallel(model)
+    # model = torch.nn.parallel.DistributedDataParallel(model)
 
     # optimizer
     config.optimizer['args']['params'] = model.parameters()
@@ -85,7 +94,7 @@ def main():
     cudnn.benchmark = True
 
     for epoch in epoch_counter:
-        train_sampler.set_epoch(epoch)
+        # train_sampler.set_epoch(epoch)
 
         # train one epoch
         train_stats = train(
@@ -110,8 +119,8 @@ def main():
             # save checkpoint
             if epoch % config.save_epoch_freq == 0:
                 checkpointer.save_checkpoint(epoch=epoch)
-
-        dist.barrier()
+        if world_size > 1:
+            dist.barrier()
 
 def train(train_loader, model, criterion, optimizer, epoch, lr_scheduler, margin_scheduler, logger, config, rank):
     train_stats = AverageMeters()

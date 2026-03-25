@@ -5,15 +5,15 @@
 set -e
 . ./path.sh || exit 1
 
-stage=1
-stop_stage=6
+stage=3
+stop_stage=4
 
-data=data
+data=/home/akuvox-a100/SSD2T/jielong.wang/dataset/train_speaker_verification
 exp=exp
 exp_dir=$exp/eres2netv2
 exp_lm_dir=$exp/eres2netv2_lm
-
-gpus="0 1 2 3"
+source /home/akuvox-a100/HDD8T/jielong.wang/3D-Speaker/.venv/bin/activate
+gpus="0"
 
 . utils/parse_options.sh || exit 1
 
@@ -26,15 +26,22 @@ fi
 if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
   # In this stage we prepare the data index files for training.
   echo "Stage2: Preparing training data index files..."
-  python local/prepare_data_csv.py --data_dir $data/3dspeaker/train
+  python local/prepare_data_csv.py --data_dir $data/3dspeaker/train --nj 32
 fi
 
 if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
   # Train the speaker embedding model.
   echo "Stage3: Training the speaker model..."
   num_gpu=$(echo $gpus | awk -F ' ' '{print NF}')
-  torchrun --nproc_per_node=$num_gpu speakerlab/bin/train.py --config conf/eres2netv2.yaml --gpu $gpus \
-           --data $data/3dspeaker/train/train.csv --noise $data/musan/wav.scp --reverb $data/rirs/wav.scp --exp_dir $exp_dir
+  # torchrun --nproc_per_node=$num_gpu speakerlab/bin/train.py --config conf/eres2netv2.yaml --gpu $gpus \
+  #          --data $data/3dspeaker/train/train.csv --noise $data/musan/wav.scp --reverb $data/rirs/wav.scp --exp_dir $exp_dir
+  CUDA_VISIBLE_DEVICES=1 python speakerlab/bin/train.py \
+    --config conf/eres2netv2.yaml \
+    --gpu 0 \
+    --data $data/3dspeaker/train/train.csv \
+    --noise $data/musan/wav.scp \
+    --reverb $data/rirs/wav.scp \
+    --exp_dir $exp_dir
 fi
 
 if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
